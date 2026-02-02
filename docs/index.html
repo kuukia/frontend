@@ -1,237 +1,292 @@
-{
-    "nodes": [
-        {
-            "parameters": {
-                "httpMethod": "POST",
-                "path": "cbooking",
-                "options": {}
-            },
-            "name": "Booking Webhook",
-            "type": "n8n-nodes-base.webhook",
-            "typeVersion": 1,
-            "position": [
-                -1264,
-                176
-            ],
-            "id": "b18035c1-7662-4e17-aa2f-e20f9b7f0dbe",
-            "webhookId": "7bdae86d-9934-41ae-98e4-eb8ea221e03b"
-        },
-        {
-            "parameters": {
-                "jsCode": "// Normalize input from webhook\nfor (const item of $input.all()) {\n  const body = item.json;\n  \n  const startTime = item.json.body.start_time;\n  const start = startTime ? new Date(startTime) : new Date();\n  \n  if (isNaN(start)) {\n    throw new Error(`Invalid start_time value: ${startTime}`);\n  }\n\n  const durationMinutes = body.duration || 60;\n  const end = new Date(start.getTime() + durationMinutes * 60000);\n  \n  item.json = {\n    start: start.toISOString(),\n    end: end.toISOString(),\n    name: item.json.body.name,\n    email: item.json.body.email,\n    service: item.json.body.service || 'General Appointment'\n  };\n}\n\nreturn $input.all();"
-            },
-            "name": "Normalize Input",
-            "type": "n8n-nodes-base.code",
-            "typeVersion": 2,
-            "position": [
-                -1024,
-                176
-            ],
-            "id": "422f2951-dd4b-44be-bbb3-7751a5bf35f9"
-        },
-        {
-            "parameters": {
-                "resource": "calendar",
-                "calendar": {
-                    "__rl": true,
-                    "value": "primary",
-                    "mode": "list"
-                },
-                "timeMin": "={{ $json.start }}",
-                "timeMax": "={{ $json.end }}",
-                "options": {}
-            },
-            "name": "Check Availability",
-            "type": "n8n-nodes-base.googleCalendar",
-            "typeVersion": 1,
-            "position": [
-                -784,
-                176
-            ],
-            "id": "1c8b06ec-c7cf-441f-b21c-c32965d3b25b",
-            "credentials": {
-                "googleCalendarOAuth2Api": {
-                    "id": "g7Hx1rBXkVJYMchU",
-                    "name": "Google Calendar account"
-                }
-            }
-        },
-        {
-            "parameters": {
-                "conditions": {
-                    "boolean": [
-                        {
-                            "value1": "={{ $json.available }}",
-                            "value2": "={{ true }}"
-                        }
-                    ]
-                }
-            },
-            "name": "Slot Available?",
-            "type": "n8n-nodes-base.if",
-            "typeVersion": 1,
-            "position": [
-                -544,
-                176
-            ],
-            "id": "6eb5bbc2-d4cf-459f-bffc-e1a29585534e"
-        },
-        {
-            "parameters": {
-                "calendar": {
-                    "__rl": true,
-                    "value": "primary",
-                    "mode": "list"
-                },
-                "start": "={{$node['Normalize Input'].json.start}}",
-                "end": "={{$node['Normalize Input'].json.end}}",
-                "additionalFields": {
-                    "description": "={{ $node['Normalize Input'].json.service }}"
-                }
-            },
-            "name": "Create HOLD Event",
-            "type": "n8n-nodes-base.googleCalendar",
-            "typeVersion": 1,
-            "position": [
-                -304,
-                48
-            ],
-            "id": "8bd8d232-66e9-47ad-8ed7-c5f7bce1fbca",
-            "credentials": {
-                "googleCalendarOAuth2Api": {
-                    "id": "g7Hx1rBXkVJYMchU",
-                    "name": "Google Calendar account"
-                }
-            }
-        },
-        {
-            "parameters": {
-                "options": {}
-            },
-            "name": "Send Confirmation Response",
-            "type": "n8n-nodes-base.respondToWebhook",
-            "typeVersion": 1,
-            "position": [
-                176,
-                48
-            ],
-            "id": "fe633147-5d7b-4f0d-8c0c-dbc941ea8ed1"
-        },
-        {
-            "parameters": {
-                "sendTo": "={{ $node['Normalize Input'].json.email }}",
-                "subject": "=Booking Confirmation - {{ $node['Normalize Input'].json.service }}",
-                "message": "=<h2>Your Booking is Confirmed! 🎉</h2>\n<p>Hi <strong>{{ $node['Normalize Input'].json.name }}</strong>,</p>\n<p>Your appointment has been successfully scheduled:</p>\n<ul>\n  <li><strong>Service:</strong> {{ $node['Normalize Input'].json.service }}</li>\n  <li><strong>Start:</strong> {{ $node['Normalize Input'].json.start }}</li>\n  <li><strong>End:</strong> {{ $node['Normalize Input'].json.end }}</li>\n</ul>\n<p>We look forward to seeing you!</p>\n<p>Best regards,<br>Your Team</p>",
-                "options": {}
-            },
-            "name": "Send Confirmation Email",
-            "type": "n8n-nodes-base.gmail",
-            "typeVersion": 2.1,
-            "position": [
-                -64,
-                48
-            ],
-            "id": "b412338c-c2fa-456b-a294-360ec92b0df7",
-            "webhookId": "b2ffcaaf-1064-4fb5-b46e-0005cc61b1ef",
-            "credentials": {
-                "gmailOAuth2": {
-                    "id": "x7Mi2J6FEW2aBmYg",
-                    "name": "Gmail account"
-                }
-            }
-        },
-        {
-            "parameters": {
-                "options": {}
-            },
-            "name": "Unavailable Response",
-            "type": "n8n-nodes-base.respondToWebhook",
-            "typeVersion": 1,
-            "position": [
-                -304,
-                288
-            ],
-            "id": "2bafaddc-d0c4-4bfe-9197-1dc651f5e7da"
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Book Your Appointment</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/josuebrunel/picodaisy@latest/pico-daisy.css">
+    <style>
+        :root {
+            --gradient-start: #667eea;
+            --gradient-end: #764ba2;
         }
-    ],
-    "connections": {
-        "Booking Webhook": {
-            "main": [
-                [
-                    {
-                        "node": "Normalize Input",
-                        "type": "main",
-                        "index": 0
-                    }
-                ]
-            ]
-        },
-        "Normalize Input": {
-            "main": [
-                [
-                    {
-                        "node": "Check Availability",
-                        "type": "main",
-                        "index": 0
-                    }
-                ]
-            ]
-        },
-        "Check Availability": {
-            "main": [
-                [
-                    {
-                        "node": "Slot Available?",
-                        "type": "main",
-                        "index": 0
-                    }
-                ]
-            ]
-        },
-        "Slot Available?": {
-            "main": [
-                [
-                    {
-                        "node": "Create HOLD Event",
-                        "type": "main",
-                        "index": 0
-                    }
-                ],
-                [
-                    {
-                        "node": "Unavailable Response",
-                        "type": "main",
-                        "index": 0
-                    }
-                ]
-            ]
-        },
-        "Create HOLD Event": {
-            "main": [
-                [
-                    {
-                        "node": "Send Confirmation Email",
-                        "type": "main",
-                        "index": 0
-                    }
-                ]
-            ]
-        },
-        "Send Confirmation Email": {
-            "main": [
-                [
-                    {
-                        "node": "Send Confirmation Response",
-                        "type": "main",
-                        "index": 0
-                    }
-                ]
-            ]
+
+        body {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, var(--gradient-start) 0%, var(--gradient-end) 100%);
+            padding: 2rem;
         }
-    },
-    "pinData": {},
-    "meta": {
-        "templateCredsSetupCompleted": true,
-        "instanceId": "c74d5391adde421b3513976f07611bd2c4c0947de52ae0bd5f2ae89df2f90022"
-    }
-}
+
+        .booking-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            border-radius: 1.5rem;
+            padding: 2.5rem;
+            max-width: 480px;
+            width: 100%;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .booking-header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .booking-header h1 {
+            font-size: 1.75rem;
+            margin-bottom: 0.5rem;
+            background: linear-gradient(135deg, #fff 0%, #e0e7ff 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .booking-header p {
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 0.95rem;
+        }
+
+        .form-group {
+            margin-bottom: 1.25rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: rgba(255, 255, 255, 0.9);
+            font-weight: 500;
+            font-size: 0.9rem;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 0.875rem 1rem;
+            border-radius: 0.75rem;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .form-group input::placeholder {
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: rgba(255, 255, 255, 0.5);
+            background: rgba(255, 255, 255, 0.15);
+            box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.1);
+        }
+
+        .form-group select option {
+            background: #1a1a2e;
+            color: #fff;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+
+        .submit-btn {
+            width: 100%;
+            padding: 1rem;
+            border: none;
+            border-radius: 0.75rem;
+            background: linear-gradient(135deg, #fff 0%, #e0e7ff 100%);
+            color: #4c1d95;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 1rem;
+        }
+
+        .submit-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+        }
+
+        .submit-btn:active {
+            transform: translateY(0);
+        }
+
+        .submit-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .response-message {
+            margin-top: 1.5rem;
+            padding: 1rem;
+            border-radius: 0.75rem;
+            text-align: center;
+            display: none;
+        }
+
+        .response-message.success {
+            background: rgba(16, 185, 129, 0.2);
+            border: 1px solid rgba(16, 185, 129, 0.5);
+            color: #6ee7b7;
+            display: block;
+        }
+
+        .response-message.error {
+            background: rgba(239, 68, 68, 0.2);
+            border: 1px solid rgba(239, 68, 68, 0.5);
+            color: #fca5a5;
+            display: block;
+        }
+
+        .icon {
+            display: inline-block;
+            width: 1.25em;
+            height: 1.25em;
+            vertical-align: middle;
+            margin-right: 0.5rem;
+        }
+
+        @media (max-width: 480px) {
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+
+            .booking-card {
+                padding: 1.5rem;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="booking-card">
+        <div class="booking-header">
+            <h1>📅 Book Your Appointment</h1>
+            <p>Select a time that works best for you</p>
+        </div>
+
+        <form id="bookingForm">
+            <div class="form-group">
+                <label for="name">Full Name</label>
+                <input type="text" id="name" name="name" placeholder="John Doe" required>
+            </div>
+
+            <div class="form-group">
+                <label for="email">Email Address</label>
+                <input type="email" id="email" name="email" placeholder="john@example.com" required>
+            </div>
+
+            <div class="form-group">
+                <label for="service">Service</label>
+                <select id="service" name="service" required>
+                    <option value="">Select a service...</option>
+                    <option value="General Consultation">General Consultation</option>
+                    <option value="Strategy Session">Strategy Session</option>
+                    <option value="Technical Review">Technical Review</option>
+                    <option value="Project Kickoff">Project Kickoff</option>
+                    <option value="Follow-up Meeting">Follow-up Meeting</option>
+                </select>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="start_time">Date & Time</label>
+                    <input type="datetime-local" id="start_time" name="start_time" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="duration">Duration</label>
+                    <select id="duration" name="duration" required>
+                        <option value="30">30 minutes</option>
+                        <option value="60" selected>1 hour</option>
+                        <option value="90">1.5 hours</option>
+                        <option value="120">2 hours</option>
+                    </select>
+                </div>
+            </div>
+
+            <button type="submit" class="submit-btn" id="submitBtn">
+                Book Appointment
+            </button>
+
+            <div id="responseMessage" class="response-message"></div>
+        </form>
+    </div>
+
+    <script>
+        // Set default date/time to tomorrow at 10:00 AM
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        tomorrow.setHours(10, 0, 0, 0);
+
+        const dateInput = document.getElementById('start_time');
+        dateInput.value = tomorrow.toISOString().slice(0, 16);
+
+        // Form submission
+        document.getElementById('bookingForm').addEventListener('submit', async function (e) {
+            e.preventDefault();
+
+            const submitBtn = document.getElementById('submitBtn');
+            const responseMessage = document.getElementById('responseMessage');
+
+            // Disable button and show loading state
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Booking...';
+            responseMessage.className = 'response-message';
+            responseMessage.style.display = 'none';
+
+            // Collect form data
+            // Convert datetime-local to ISO 8601 format with timezone
+            const startTimeValue = document.getElementById('start_time').value;
+            const startDate = new Date(startTimeValue);
+
+            const formData = {
+                name: document.getElementById('name').value,
+                email: document.getElementById('email').value,
+                service: document.getElementById('service').value,
+                start_time: startDate.toISOString(),  // e.g., "2026-04-02T17:00:00.000Z"
+                duration: parseInt(document.getElementById('duration').value)
+            };
+
+            try {
+                const response = await fetch('https://josuebrunel.app.n8n.cloud/webhook/cbooking', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(formData)
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    responseMessage.className = 'response-message success';
+                    responseMessage.innerHTML = `✅ ${data.message || 'Booking request submitted successfully!'}`;
+                } else {
+                    responseMessage.className = 'response-message error';
+                    responseMessage.innerHTML = `❌ ${data.message || 'Unable to book this slot. Please try another time.'}`;
+                }
+            } catch (error) {
+                responseMessage.className = 'response-message error';
+                responseMessage.innerHTML = '❌ Connection error. Please try again later.';
+                console.error('Booking error:', error);
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Book Appointment';
+            }
+        });
+    </script>
+</body>
+
+</html>

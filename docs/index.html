@@ -1,0 +1,237 @@
+{
+    "nodes": [
+        {
+            "parameters": {
+                "httpMethod": "POST",
+                "path": "cbooking",
+                "options": {}
+            },
+            "name": "Booking Webhook",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 1,
+            "position": [
+                -1264,
+                176
+            ],
+            "id": "b18035c1-7662-4e17-aa2f-e20f9b7f0dbe",
+            "webhookId": "7bdae86d-9934-41ae-98e4-eb8ea221e03b"
+        },
+        {
+            "parameters": {
+                "jsCode": "// Normalize input from webhook\nfor (const item of $input.all()) {\n  const body = item.json;\n  \n  const startTime = item.json.body.start_time;\n  const start = startTime ? new Date(startTime) : new Date();\n  \n  if (isNaN(start)) {\n    throw new Error(`Invalid start_time value: ${startTime}`);\n  }\n\n  const durationMinutes = body.duration || 60;\n  const end = new Date(start.getTime() + durationMinutes * 60000);\n  \n  item.json = {\n    start: start.toISOString(),\n    end: end.toISOString(),\n    name: item.json.body.name,\n    email: item.json.body.email,\n    service: item.json.body.service || 'General Appointment'\n  };\n}\n\nreturn $input.all();"
+            },
+            "name": "Normalize Input",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                -1024,
+                176
+            ],
+            "id": "422f2951-dd4b-44be-bbb3-7751a5bf35f9"
+        },
+        {
+            "parameters": {
+                "resource": "calendar",
+                "calendar": {
+                    "__rl": true,
+                    "value": "primary",
+                    "mode": "list"
+                },
+                "timeMin": "={{ $json.start }}",
+                "timeMax": "={{ $json.end }}",
+                "options": {}
+            },
+            "name": "Check Availability",
+            "type": "n8n-nodes-base.googleCalendar",
+            "typeVersion": 1,
+            "position": [
+                -784,
+                176
+            ],
+            "id": "1c8b06ec-c7cf-441f-b21c-c32965d3b25b",
+            "credentials": {
+                "googleCalendarOAuth2Api": {
+                    "id": "g7Hx1rBXkVJYMchU",
+                    "name": "Google Calendar account"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "conditions": {
+                    "boolean": [
+                        {
+                            "value1": "={{ $json.available }}",
+                            "value2": "={{ true }}"
+                        }
+                    ]
+                }
+            },
+            "name": "Slot Available?",
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 1,
+            "position": [
+                -544,
+                176
+            ],
+            "id": "6eb5bbc2-d4cf-459f-bffc-e1a29585534e"
+        },
+        {
+            "parameters": {
+                "calendar": {
+                    "__rl": true,
+                    "value": "primary",
+                    "mode": "list"
+                },
+                "start": "={{$node['Normalize Input'].json.start}}",
+                "end": "={{$node['Normalize Input'].json.end}}",
+                "additionalFields": {
+                    "description": "={{ $node['Normalize Input'].json.service }}"
+                }
+            },
+            "name": "Create HOLD Event",
+            "type": "n8n-nodes-base.googleCalendar",
+            "typeVersion": 1,
+            "position": [
+                -304,
+                48
+            ],
+            "id": "8bd8d232-66e9-47ad-8ed7-c5f7bce1fbca",
+            "credentials": {
+                "googleCalendarOAuth2Api": {
+                    "id": "g7Hx1rBXkVJYMchU",
+                    "name": "Google Calendar account"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "options": {}
+            },
+            "name": "Send Confirmation Response",
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1,
+            "position": [
+                176,
+                48
+            ],
+            "id": "fe633147-5d7b-4f0d-8c0c-dbc941ea8ed1"
+        },
+        {
+            "parameters": {
+                "sendTo": "={{ $node['Normalize Input'].json.email }}",
+                "subject": "=Booking Confirmation - {{ $node['Normalize Input'].json.service }}",
+                "message": "=<h2>Your Booking is Confirmed! 🎉</h2>\n<p>Hi <strong>{{ $node['Normalize Input'].json.name }}</strong>,</p>\n<p>Your appointment has been successfully scheduled:</p>\n<ul>\n  <li><strong>Service:</strong> {{ $node['Normalize Input'].json.service }}</li>\n  <li><strong>Start:</strong> {{ $node['Normalize Input'].json.start }}</li>\n  <li><strong>End:</strong> {{ $node['Normalize Input'].json.end }}</li>\n</ul>\n<p>We look forward to seeing you!</p>\n<p>Best regards,<br>Your Team</p>",
+                "options": {}
+            },
+            "name": "Send Confirmation Email",
+            "type": "n8n-nodes-base.gmail",
+            "typeVersion": 2.1,
+            "position": [
+                -64,
+                48
+            ],
+            "id": "b412338c-c2fa-456b-a294-360ec92b0df7",
+            "webhookId": "b2ffcaaf-1064-4fb5-b46e-0005cc61b1ef",
+            "credentials": {
+                "gmailOAuth2": {
+                    "id": "x7Mi2J6FEW2aBmYg",
+                    "name": "Gmail account"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "options": {}
+            },
+            "name": "Unavailable Response",
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1,
+            "position": [
+                -304,
+                288
+            ],
+            "id": "2bafaddc-d0c4-4bfe-9197-1dc651f5e7da"
+        }
+    ],
+    "connections": {
+        "Booking Webhook": {
+            "main": [
+                [
+                    {
+                        "node": "Normalize Input",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Normalize Input": {
+            "main": [
+                [
+                    {
+                        "node": "Check Availability",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Check Availability": {
+            "main": [
+                [
+                    {
+                        "node": "Slot Available?",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Slot Available?": {
+            "main": [
+                [
+                    {
+                        "node": "Create HOLD Event",
+                        "type": "main",
+                        "index": 0
+                    }
+                ],
+                [
+                    {
+                        "node": "Unavailable Response",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Create HOLD Event": {
+            "main": [
+                [
+                    {
+                        "node": "Send Confirmation Email",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Send Confirmation Email": {
+            "main": [
+                [
+                    {
+                        "node": "Send Confirmation Response",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "pinData": {},
+    "meta": {
+        "templateCredsSetupCompleted": true,
+        "instanceId": "c74d5391adde421b3513976f07611bd2c4c0947de52ae0bd5f2ae89df2f90022"
+    }
+}
